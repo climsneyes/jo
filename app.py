@@ -64,7 +64,7 @@ def get_ordinance_detail(ordinance_id):
         'type': 'XML'
     }
     try:
-        response = requests.get(detail_url, params=params)
+        response = requests.get(detail_url, params=params, timeout=60)
         root = ET.fromstring(response.text)
         articles = []
         for article in root.findall('.//조'):
@@ -111,7 +111,7 @@ def search():
                     'org': org_code
                 }
                 
-                response = requests.get(search_url, params=params)
+                response = requests.get(search_url, params=params, timeout=60)
                 response.raise_for_status()  # HTTP 오류 체크
                 
                 root = ET.fromstring(response.text)
@@ -190,7 +190,7 @@ def save():
                     'org': org_code
                 }
                 
-                response = requests.get(search_url, params=params)
+                response = requests.get(search_url, params=params, timeout=60)
                 response.raise_for_status()
                 
                 root = ET.fromstring(response.text)
@@ -378,7 +378,7 @@ def compare():
                     'org': org_code
                 }
                 
-                response = requests.get(search_url, params=params)
+                response = requests.get(search_url, params=params, timeout=60)
                 response.raise_for_status()
                 
                 root = ET.fromstring(response.text)
@@ -428,10 +428,15 @@ def compare():
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
                 response = model.generate_content(prompt)
-                if response.text:
+                if response and hasattr(response, 'text') and response.text:
                     analysis_results.append({
                         'model': 'Gemini',
                         'content': response.text
+                    })
+                else:
+                    analysis_results.append({
+                        'model': 'Gemini',
+                        'error': 'Gemini API 응답이 비어있음 또는 None입니다.'
                     })
             except Exception as e:
                 print(f"Gemini API 오류: {str(e)}")
@@ -648,7 +653,7 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                         'type': 'XML',
                         'query': upper_law_name
                     }
-                    search_resp = requests.get(search_url, params=search_params)
+                    search_resp = requests.get(search_url, params=search_params, timeout=60)
                     search_root = ET.fromstring(search_resp.text)
                     
                     law_id = None
@@ -669,7 +674,7 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                         'type': 'XML',
                         'ID': law_id
                     }
-                    detail_resp = requests.get(detail_url, params=detail_params)
+                    detail_resp = requests.get(detail_url, params=detail_params, timeout=60)
                     detail_root = ET.fromstring(detail_resp.text)
                     
                     upper_law_text = ''
@@ -721,7 +726,7 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                                 '- 개선이 필요한 부분과 그 방향성\n'
                             )
                             response = model.generate_content(prompt)
-                            if response.text:
+                            if response and hasattr(response, 'text') and response.text:
                                 clean_gemini = re.sub(r'[\*#`>\-]+', '', response.text)
                                 for line in clean_gemini.split('\n'):
                                     if line.strip():

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>광역지자체 조례 검색, 비교, 분석</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+        .glass-button {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.1);
+            transition: all 0.3s ease;
+        }
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 20px 0 rgba(31, 38, 135, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 p-4">
+    <div class="container mx-auto max-w-4xl">
+        <div class="glass-effect rounded-2xl p-8 my-8">
+            <div class="flex items-center mb-8">
+                <img src="busan.PNG" alt="Busan is good" class="h-16 w-auto mr-4">
+                <h1 class="text-3xl font-bold text-black text-center flex-1">광역지자체 조례 검색, 비교, 분석</h1>
+                <img src="symbol.png" alt="Symbol" class="h-16 w-auto ml-4">
+            </div>
+            
+            <!-- 검색 섹션 -->
+            <div class="mb-8">
+                <div class="flex gap-2">
+                    <input type="text" id="searchInput" placeholder="조례명을 입력하세요 (키워드)" 
+                           class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-500">
+                    <button id="searchBtn" class="glass-button px-6 py-2 rounded-lg text-black font-medium">
+                        검색
+                    </button>
+                </div>
+            </div>
+
+            <!-- 순서 안내 섹션 -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold text-black mb-4">[순서]</h2>
+                <div class="space-y-4">
+                    <button id="saveBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
+                        1. 검색된 타 시도 조례를 3단비교 형태로 MS워드 저장
+                    </button>
+                    <button id="uploadBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
+                        2. 제정, 개정할 조례안 PDF파일 업로드
+                    </button>
+                    <button id="compareBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
+                        3. 제개정 조례안과 타시도 조례안 비교 분석한 후 MS워드로 저장(API키 필요)
+                    </button>
+                </div>
+            </div>
+
+            <!-- API 키 입력 섹션 -->
+            <div class="mb-8 space-y-4">
+                <div class="flex items-center gap-4">
+                    <label for="geminiApiKey" class="w-32 text-black font-medium">Gemini API 키:</label>
+                    <input type="password" id="geminiApiKey" placeholder="Gemini API 키를 입력하세요"
+                           class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-500">
+                    <button class="help-btn glass-button px-4 py-2 rounded-lg text-black" data-api="gemini">도움말</button>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label for="openaiApiKey" class="w-32 text-black font-medium">OpenAI API 키:</label>
+                    <input type="password" id="openaiApiKey" placeholder="OpenAI API 키를 입력하세요"
+                           class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-500">
+                    <button class="help-btn glass-button px-4 py-2 rounded-lg text-black" data-api="openai">도움말</button>
+                </div>
+            </div>
+
+            <!-- PDF 파일 입력 (숨김) -->
+            <input type="file" id="pdfFile" accept=".pdf" class="hidden">
+
+            <!-- 상태 표시 섹션 -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold text-black mb-4">[진행상황]</h2>
+                <div class="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                    <div id="progressBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div id="statusMessage" class="text-black text-center"></div>
+            </div>
+
+            <!-- 검색결과 섹션 -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold text-black mb-4">[검색결과]</h2>
+                <div id="resultText" class="glass-effect rounded-lg p-4 min-h-[200px] text-black"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API 도움말 모달 -->
+    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+        <div class="glass-effect rounded-2xl p-8 max-w-2xl mx-4 relative">
+            <span class="close absolute top-4 right-4 text-2xl cursor-pointer text-black">&times;</span>
+            <div id="helpContent" class="text-black"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

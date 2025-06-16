@@ -633,6 +633,7 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
             doc.add_heading('상위법령 위반 여부 검토', level=1)
             for upper_law_name in upper_law_candidates:
                 try:
+                    print(f"[DEBUG] 상위법령명: {upper_law_name}")
                     # 1. lawSearch로 현행 법령ID 및 법령명한글 얻기
                     search_params = {
                         'OC': OC,
@@ -641,8 +642,8 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                         'query': upper_law_name
                     }
                     search_resp = requests.get(search_url, params=search_params, timeout=60)
+                    print(f"[DEBUG] lawSearch status: {search_resp.status_code}")
                     search_root = ET.fromstring(search_resp.text)
-                    
                     law_id = None
                     law_name_kor = None
                     for law in search_root.findall('.//law'):
@@ -650,10 +651,10 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                             law_id = law.find('법령ID').text if law.find('법령ID') is not None else None
                             law_name_kor = law.find('법령명한글').text if law.find('법령명한글') is not None else None
                             break
-                    
+                    print(f"[DEBUG] law_id: {law_id}, law_name_kor: {law_name_kor}")
                     if not law_id or not law_name_kor:
+                        print(f"[DEBUG] 법령ID 또는 법령명한글 없음, continue")
                         continue
-
                     # 2. lawService로 본문 요청
                     detail_params = {
                         'OC': OC,
@@ -662,8 +663,8 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                         'ID': law_id
                     }
                     detail_resp = requests.get(detail_url, params=detail_params, timeout=60)
+                    print(f"[DEBUG] lawService status: {detail_resp.status_code}")
                     detail_root = ET.fromstring(detail_resp.text)
-                    
                     upper_law_text = ''
                     for node in detail_root.iter():
                         if node.tag == '조문내용' and node.text and node.text.strip():
@@ -678,14 +679,14 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                             content = re.sub(r'<[^>]+>', '', node.text)
                             content = content.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').strip()
                             upper_law_text += '        ' + content + '\n'
-
+                    print(f"[DEBUG] upper_law_text length: {len(upper_law_text)}")
                     if not upper_law_text.strip():
+                        print(f"[DEBUG] upper_law_text가 비어 있음, continue")
                         continue
-
                     # 상위법령 검토 결과 추가
                     doc.add_heading(f'상위 법령명: {upper_law_name}', level=2)
                     doc.add_paragraph('(아래는 상위 법령 전체 조문 중 조례와 직접적으로 관련 있는 조문만 발췌/요약한 내용입니다.)')
-
+                    doc.add_paragraph(upper_law_text[:2000])  # 본문 일부도 워드에 기록
                     # Gemini API로 위반 여부 분석
                     if 'geminiApiKey' in request.form:
                         try:
@@ -712,12 +713,16 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
                                 '- 상위 법령과의 관계에서 주의해야 할 사항\n'
                                 '- 개선이 필요한 부분과 그 방향성\n'
                             )
+                            print(f"[DEBUG] Gemini 프롬프트 길이: {len(prompt)}")
                             response = model.generate_content(prompt)
+                            print(f"[DEBUG] Gemini 응답: {getattr(response, 'text', None)}")
                             if response and hasattr(response, 'text') and response.text:
                                 clean_gemini = re.sub(r'[\*#`>\-]+', '', response.text)
                                 for line in clean_gemini.split('\n'):
                                     if line.strip():
                                         doc.add_paragraph(line.strip())
+                            else:
+                                doc.add_paragraph('Gemini API 응단이 비어있음 또는 None입니다.')
                         except Exception as e:
                             print(f"Gemini API 오류: {e}")
                             doc.add_paragraph(f"상위법령 위반 여부 분석 중 오류가 발생했습니다: {str(e)}")

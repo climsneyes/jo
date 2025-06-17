@@ -607,24 +607,20 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
         clean_text = re.sub(r'[#*`>\-]+', '', content)
         
         # '3. 검토 시 유의사항'과 '4.' 블록 모두에서 상위법령 후보 추출
-        def extract_law_sections(text):
-            # '3. 검토 시 유의사항' ~ '4.' 또는 'd)' 또는 끝까지
-            m1 = re.search(r'3[.)]\s*검토 시 유의사항[\s\S]+?(?=\n4[.)]|\nd[.)]|$)', text)
-            section1 = m1.group(0) if m1 else ''
-            # 'd) [실무적 검토 포인트]' ~ '4.' 또는 끝까지
-            m2 = re.search(r'd[.)]\s*\[실무적 검토 포인트\][\s\S]+?(?=\n4[.)]|$)', text)
-            section2 = m2.group(0) if m2 else ''
-            return section1 + '\n' + section2
-
-        law_section = extract_law_sections(clean_text)
-        
-        # 상위법령 후보 추출
-        upper_law_candidates = set()
-        law_pattern = re.compile(r'([가-힣·\s]{2,}?(법|시행령|시행규칙))')
-        for m in law_pattern.finditer(law_section):
-            law_name = m.group(1).strip('「」[]()<>"" .,;:!?~-')
-            if is_valid_law_name(law_name):
-                upper_law_candidates.add(law_name)
+        def extract_law_names(text):
+            # 「도로교통법」, 도로교통법, (도로교통법), [도로교통법] 등 다양한 표기 지원
+            # 한글+·+공백+법/시행령/시행규칙 으로 끝나는 단어만 추출
+            pattern = re.compile(r'[「\[(]?([가-힣·\s]{2,}?)(법|시행령|시행규칙)[」\])]?', re.MULTILINE)
+            candidates = set()
+            for m in pattern.finditer(text):
+                # 그룹1+2가 핵심 법령명
+                law_name = (m.group(1) + m.group(2)).strip()
+                # 불필요한 공백, 특수문자 제거
+                law_name = re.sub(r'[^가-힣·시행령시행규칙법]', '', law_name)
+                if is_valid_law_name(law_name):
+                    candidates.add(law_name)
+            return candidates
+        upper_law_candidates = extract_law_names(clean_text)
 
         # 나머지 분석 결과 추가 (중복 문단 제거)
         added_paragraphs = set()

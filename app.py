@@ -555,11 +555,11 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
     doc.add_heading('조례 비교 분석 결과', level=1)
     doc.add_paragraph(f'분석 일시: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
 
-    # 디버그 로그가 있으면 문서에 추가
-    if debug_logs:
-        doc.add_heading('디버그 로그', level=2)
-        for log in debug_logs:
-            doc.add_paragraph(log)
+    # 디버그 로그는 워드 문서에 추가하지 않음
+    # if debug_logs:
+    #     doc.add_heading('디버그 로그', level=2)
+    #     for log in debug_logs:
+    #         doc.add_paragraph(log)
 
     # 각 API 분석 결과 추가
     for result in analysis_results:

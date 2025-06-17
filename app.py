@@ -608,19 +608,26 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
         
         # '3. 검토 시 유의사항'과 '4.' 블록 모두에서 상위법령 후보 추출
         def extract_law_names(text):
-            # 「도로교통법」, 도로교통법, (도로교통법), [도로교통법] 등 다양한 표기 지원
-            # 한글+·+공백+법/시행령/시행규칙 으로 끝나는 단어만 추출
-            pattern = re.compile(r'[「\[(]?([가-힣·\s]{2,}?)(법|시행령|시행규칙)[」\])]?', re.MULTILINE)
+            # 괄호, 따옴표, 공백 등 구분자에 둘러싸인 경우에도 핵심 법령명만 추출
+            pattern = re.compile(
+                r'(?:^|[\s\(\[\{\<\"\'\“\‘『「])'  # 앞 구분자 또는 문장 처음
+                r'([가-힣·]{2,10}?(법|시행령|시행규칙))'      # 2~10글자 한글+법/시행령/시행규칙
+                r'(?:[\s\)\]\}\>\"\'\”\’』」.,;:!?~-]|$)'  # 뒤 구분자 또는 끝
+            )
             candidates = set()
             for m in pattern.finditer(text):
-                # 그룹1+2가 핵심 법령명
-                law_name = (m.group(1) + m.group(2)).strip()
-                # 불필요한 공백, 특수문자 제거
-                law_name = re.sub(r'[^가-힣·시행령시행규칙법]', '', law_name)
+                law_name = m.group(1)
                 if is_valid_law_name(law_name):
                     candidates.add(law_name)
             return candidates
-        upper_law_candidates = extract_law_names(clean_text)
+
+        def extract_law_section_c(text):
+            # "c) 법령우위의 원칙 위반 여부" ~ 다음 항목 또는 끝까지
+            m = re.search(r'c[).]\s*법령우위의 원칙 위반 여부[\s\S]+?(?=\n[0-9a-z][).]|\n[가-힣]\)|$)', text, re.IGNORECASE)
+            return m.group(0) if m else ''
+
+        law_section_c = extract_law_section_c(clean_text)
+        upper_law_candidates = extract_law_names(law_section_c)
 
         # 나머지 분석 결과 추가 (중복 문단 제거)
         added_paragraphs = set()

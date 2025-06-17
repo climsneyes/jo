@@ -276,7 +276,6 @@ def save():
         # 임시 파일로 저장
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'search_results.docx')
         doc.save(temp_docx)
-        print(f"[DEBUG] 워드 파일 크기: {os.path.getsize(temp_docx)} bytes")
 
         return send_file(
             temp_docx,
@@ -407,7 +406,7 @@ def compare():
                     })
                     
             except Exception as e:
-                debug_logs.append(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
+                print(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
                 continue
 
         # PDF 텍스트 추출
@@ -478,168 +477,23 @@ def compare():
         if not analysis_results:
             return jsonify({'error': '분석 결과가 없습니다.'}), 500
 
-        # 디버그 로그와 분석 결과만 반환
-        return jsonify({
-            'result': analysis_results,
-            'debug': debug_logs
-        })
-
-    except Exception as e:
-        return jsonify({'error': f'비교 분석 중 오류가 발생했습니다: {str(e)}'}), 500
-
-@app.route('/api/compare/download', methods=['POST'])
-def compare_download():
-    try:
-        debug_logs = []
-        if 'pdf' not in request.files:
-            return jsonify({'error': 'PDF 파일이 없습니다.'}), 400
-
-        pdf_file = request.files['pdf']
-        if pdf_file.filename == '':
-            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-
-        if not pdf_file.filename.endswith('.pdf'):
-            return jsonify({'error': 'PDF 파일만 업로드 가능합니다.'}), 400
-
-        # PDF 파일 저장
-        filename = secure_filename(pdf_file.filename)
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        pdf_file.save(pdf_path)
-
-        # 검색 결과 수집
-        query = request.form.get('query', '').strip()
-        if not query:
-            return jsonify({'error': '검색어가 필요합니다.'}), 400
-
-        results = []
-        total_count = 0
-
-        # 각 광역지자체별로 검색
-        for org_code, metro_name in metropolitan_govs.items():
-            try:
-                params = {
-                    'OC': OC,
-                    'target': 'ordin',
-                    'type': 'XML',
-                    'query': query,
-                    'display': 100,
-                    'search': 1,  # 제목만 검색
-                    'sort': 'ddes',
-                    'page': 1,
-                    'org': org_code
-                }
-                
-                response = requests.get(search_url, params=params, timeout=60)
-                response.raise_for_status()
-                
-                root = ET.fromstring(response.text)
-                for law in root.findall('.//law'):
-                    ordinance_name = law.find('자치법규명').text if law.find('자치법규명') is not None else ""
-                    ordinance_id = law.find('자치법규ID').text if law.find('자치법규ID') is not None else None
-                    기관명 = law.find('지자체기관명').text if law.find('지자체기관명') is not None else ""
-                    
-                    if 기관명 != metro_name:
-                        continue  # 본청이 아니면 건너뜀
-                        
-                    # 검색어 매칭 로직
-                    search_terms = [term.lower() for term in query.split() if term.strip()]
-                    ordinance_name_clean = ordinance_name.replace(' ', '').lower()
-                    if not all(term in ordinance_name_clean for term in search_terms):
-                        continue
-                        
-                    total_count += 1
-                    articles = get_ordinance_detail(ordinance_id)
-                    results.append({
-                        'name': ordinance_name,
-                        'content': articles,
-                        'metro': metro_name
-                    })
-                    
-            except Exception as e:
-                debug_logs.append(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
-                continue
-
-        # PDF 텍스트 추출
-        pdf_text = extract_pdf_text(pdf_path)
-
-        # API 키 확인
-        gemini_api_key = request.form.get('geminiApiKey', '').strip()
-        openai_api_key = request.form.get('openaiApiKey', '').strip()
-
-        if not gemini_api_key and not openai_api_key:
-            return jsonify({'error': 'API 키를 하나 이상 입력해주세요.'}), 400
-
-        analysis_results = []
-        is_first_ordinance = not results
-
-        # Gemini API 분석
-        if gemini_api_key:
-            try:
-                genai.configure(api_key=gemini_api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
-                debug_logs.append(f"[DEBUG] Gemini 프롬프트 길이: {len(prompt)}")
-                response = model.generate_content(prompt)
-                debug_logs.append(f"[DEBUG] Gemini 응답: {getattr(response, 'text', None)}")
-                if response and hasattr(response, 'text') and response.text:
-                    analysis_results.append({
-                        'model': 'Gemini',
-                        'content': response.text
-                    })
-                else:
-                    analysis_results.append({
-                        'model': 'Gemini',
-                        'error': 'Gemini API 응답이 비어있음 또는 None입니다.'
-                    })
-            except Exception as e:
-                debug_logs.append(f"Gemini API 오류: {str(e)}")
-                analysis_results.append({
-                    'model': 'Gemini',
-                    'error': str(e)
-                })
-
-        # OpenAI API 분석
-        if openai_api_key:
-            try:
-                openai.api_key = openai_api_key
-                prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
-                response = openai.ChatCompletion.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "당신은 법률 전문가입니다. 조례 분석과 검토를 도와주세요."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=4000
-                )
-                if response.choices[0].message.content:
-                    analysis_results.append({
-                        'model': 'OpenAI',
-                        'content': response.choices[0].message.content
-                    })
-            except Exception as e:
-                print(f"OpenAI API 오류: {str(e)}")
-                analysis_results.append({
-                    'model': 'OpenAI',
-                    'error': str(e)
-                })
-
-        if not analysis_results:
-            return jsonify({'error': '분석 결과가 없습니다.'}), 500
-
+        # Word 문서 생성
         doc = create_comparison_document(pdf_text, results, analysis_results, debug_logs)
+
+        # 임시 파일로 저장
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'comparison_results.docx')
         doc.save(temp_docx)
-        print(f"[DEBUG] 워드 파일 크기: {os.path.getsize(temp_docx)} bytes")
+
         return send_file(
             temp_docx,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,
             download_name=f'조례_비교분석_{datetime.now().strftime("%Y%m%d_%H%M%S")}.docx'
-        )
+        ), 200, {'X-Debug-Log': '\n'.join(debug_logs)}
 
     except Exception as e:
-        return jsonify({'error': f'비교 분석(워드 저장) 중 오류가 발생했습니다: {str(e)}'}), 500
+        print(f"비교 분석 중 오류 발생: {str(e)}")
+        return jsonify({'error': f'비교 분석 중 오류가 발생했습니다: {str(e)}'}), 500
 
 def create_analysis_prompt(pdf_text, search_results, is_first_ordinance=False):
     prompt = (

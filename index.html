@@ -28,18 +28,18 @@
 <body class="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 p-4">
     <div class="container mx-auto max-w-4xl">
         <div class="glass-effect rounded-2xl p-8 my-8">
-            <div class="flex items-center mb-8">
-                <img src="busan.PNG" alt="Busan is good" class="h-16 w-auto mr-4">
-                <h1 class="text-2xl sm:text-3xl font-bold text-black text-center flex-1">광역지자체 조례 검색, 비교, 분석</h1>
-                <img src="symbol.png" alt="Symbol" class="h-16 w-auto ml-4">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center items-center mb-8">
+                <img src="busan.PNG" alt="Busan is good" class="w-20 sm:w-24 md:w-32 h-auto">
+                <h1 class="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold text-black text-center flex-1">광역지자체 조례 검색, 비교, 분석</h1>
+                <img src="symbol.png" alt="Symbol" class="w-20 sm:w-24 md:w-32 h-auto">
             </div>
             
             <!-- 검색 섹션 -->
             <div class="mb-8">
-                <div class="flex gap-2">
+                <div class="flex flex-col sm:flex-row gap-2">
                     <input type="text" id="searchInput" placeholder="조례명을 입력하세요 (키워드)" 
-                           class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-500">
-                    <button id="searchBtn" class="glass-button px-6 py-2 rounded-lg text-black font-medium">
+                           class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-500">
+                    <button id="searchBtn" class="glass-button w-full sm:w-auto px-6 py-2 rounded-lg text-black font-medium">
                         검색
                     </button>
                 </div>
@@ -49,14 +49,14 @@
             <div class="mb-8">
                 <h2 class="text-xl font-bold text-black mb-4">[순서]</h2>
                 <div class="space-y-4">
-                    <button id="saveBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
-                        1. 검색된 타 시도 조례를 3단비교 형태로 MS워드 저장
+                    <button id="saveBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left text-sm sm:text-base md:text-lg">
+                        1. 검색된 타 시도 조례를 3단비교 형태로 MS워드 저장<wbr>형
                     </button>
-                    <button id="uploadBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
-                        2. 제정, 개정할 조례안 PDF파일 업로드
+                    <button id="uploadBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left text-sm sm:text-base md:text-lg">
+                        2. 제정, 개정할 조례안 PDF파일 업로<br class="block sm:hidden">드
                     </button>
-                    <button id="compareBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left">
-                        3. 제개정 조례안과 타시도 조례안 비교 분석한 후 MS워드로 저장(API키 필요)
+                    <button id="compareBtn" class="glass-button w-full px-6 py-3 rounded-lg text-black font-medium text-left text-sm sm:text-base md:text-lg">
+                        3. 제개정 조례안과 타시도 조례안 <br class="block sm:hidden">비<br class="block sm:hidden">교 분석한 후 MS워드로 저장(<br class="block sm:hidden">API키 필요)
                     </button>
                 </div>
             </div>

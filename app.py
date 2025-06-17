@@ -638,6 +638,8 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
         if upper_law_candidates:
             doc.add_page_break()  # 새로운 페이지 시작
             doc.add_heading('상위법령 위반 여부 검토', level=1)
+            # 임시 파일 경로 확보
+            temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'comparison_results.docx')
             for upper_law_name in upper_law_candidates:
                 try:
                     print(f"[DEBUG] 상위법령명: {upper_law_name}")
@@ -693,7 +695,7 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
                     # 상위법령 검토 결과 추가
                     doc.add_heading(f'상위 법령명: {upper_law_name}', level=2)
                     doc.add_paragraph('(아래는 상위 법령 전체 조문 중 조례와 직접적으로 관련 있는 조문만 발췌/요약한 내용입니다.)')
-                    doc.add_paragraph(upper_law_text[:2000])  # 본문 일부도 워드에 기록
+                    doc.add_paragraph(upper_law_text[:2000])
                     # Gemini API로 위반 여부 분석
                     if 'geminiApiKey' in request.form:
                         try:
@@ -733,10 +735,12 @@ def create_comparison_document(pdf_text, search_results, analysis_results, debug
                         except Exception as e:
                             print(f"Gemini API 오류: {e}")
                             doc.add_paragraph(f"상위법령 위반 여부 분석 중 오류가 발생했습니다: {str(e)}")
-
+                    # ★★★ 상위법령 하나 처리할 때마다 워드에 저장
+                    doc.save(temp_docx)
                 except Exception as e:
                     print(f"상위법령 검토 중 오류 발생: {e}")
-                    continue
+                    doc.add_paragraph(f"상위법령 검토 중 오류 발생: {str(e)}")
+                    doc.save(temp_docx)
 
     return doc
 

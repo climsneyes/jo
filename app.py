@@ -276,6 +276,7 @@ def save():
         # 임시 파일로 저장
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'search_results.docx')
         doc.save(temp_docx)
+        print(f"[DEBUG] 워드 파일 크기: {os.path.getsize(temp_docx)} bytes")
 
         return send_file(
             temp_docx,
@@ -629,6 +630,7 @@ def compare_download():
         doc = create_comparison_document(pdf_text, results, analysis_results, debug_logs)
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'comparison_results.docx')
         doc.save(temp_docx)
+        print(f"[DEBUG] 워드 파일 크기: {os.path.getsize(temp_docx)} bytes")
         return send_file(
             temp_docx,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',

@@ -340,6 +340,7 @@ def extract_pdf_text(pdf_path):
 @app.route('/api/compare', methods=['POST'])
 def compare():
     try:
+        debug_logs = []
         if 'pdf' not in request.files:
             return jsonify({'error': 'PDF 파일이 없습니다.'}), 400
 
@@ -405,7 +406,7 @@ def compare():
                     })
                     
             except Exception as e:
-                print(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
+                debug_logs.append(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
                 continue
 
         # PDF 텍스트 추출
@@ -427,7 +428,9 @@ def compare():
                 genai.configure(api_key=gemini_api_key)
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
+                debug_logs.append(f"[DEBUG] Gemini 프롬프트 길이: {len(prompt)}")
                 response = model.generate_content(prompt)
+                debug_logs.append(f"[DEBUG] Gemini 응답: {getattr(response, 'text', None)}")
                 if response and hasattr(response, 'text') and response.text:
                     analysis_results.append({
                         'model': 'Gemini',
@@ -439,7 +442,7 @@ def compare():
                         'error': 'Gemini API 응답이 비어있음 또는 None입니다.'
                     })
             except Exception as e:
-                print(f"Gemini API 오류: {str(e)}")
+                debug_logs.append(f"Gemini API 오류: {str(e)}")
                 analysis_results.append({
                     'model': 'Gemini',
                     'error': str(e)
@@ -474,13 +477,158 @@ def compare():
         if not analysis_results:
             return jsonify({'error': '분석 결과가 없습니다.'}), 500
 
-        # Word 문서 생성
-        doc = create_comparison_document(pdf_text, results, analysis_results)
+        # 디버그 로그와 분석 결과만 반환
+        return jsonify({
+            'result': analysis_results,
+            'debug': debug_logs
+        })
 
-        # 임시 파일로 저장
+    except Exception as e:
+        return jsonify({'error': f'비교 분석 중 오류가 발생했습니다: {str(e)}'}), 500
+
+@app.route('/api/compare/download', methods=['POST'])
+def compare_download():
+    try:
+        debug_logs = []
+        if 'pdf' not in request.files:
+            return jsonify({'error': 'PDF 파일이 없습니다.'}), 400
+
+        pdf_file = request.files['pdf']
+        if pdf_file.filename == '':
+            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
+
+        if not pdf_file.filename.endswith('.pdf'):
+            return jsonify({'error': 'PDF 파일만 업로드 가능합니다.'}), 400
+
+        # PDF 파일 저장
+        filename = secure_filename(pdf_file.filename)
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        pdf_file.save(pdf_path)
+
+        # 검색 결과 수집
+        query = request.form.get('query', '').strip()
+        if not query:
+            return jsonify({'error': '검색어가 필요합니다.'}), 400
+
+        results = []
+        total_count = 0
+
+        # 각 광역지자체별로 검색
+        for org_code, metro_name in metropolitan_govs.items():
+            try:
+                params = {
+                    'OC': OC,
+                    'target': 'ordin',
+                    'type': 'XML',
+                    'query': query,
+                    'display': 100,
+                    'search': 1,  # 제목만 검색
+                    'sort': 'ddes',
+                    'page': 1,
+                    'org': org_code
+                }
+                
+                response = requests.get(search_url, params=params, timeout=60)
+                response.raise_for_status()
+                
+                root = ET.fromstring(response.text)
+                for law in root.findall('.//law'):
+                    ordinance_name = law.find('자치법규명').text if law.find('자치법규명') is not None else ""
+                    ordinance_id = law.find('자치법규ID').text if law.find('자치법규ID') is not None else None
+                    기관명 = law.find('지자체기관명').text if law.find('지자체기관명') is not None else ""
+                    
+                    if 기관명 != metro_name:
+                        continue  # 본청이 아니면 건너뜀
+                        
+                    # 검색어 매칭 로직
+                    search_terms = [term.lower() for term in query.split() if term.strip()]
+                    ordinance_name_clean = ordinance_name.replace(' ', '').lower()
+                    if not all(term in ordinance_name_clean for term in search_terms):
+                        continue
+                        
+                    total_count += 1
+                    articles = get_ordinance_detail(ordinance_id)
+                    results.append({
+                        'name': ordinance_name,
+                        'content': articles,
+                        'metro': metro_name
+                    })
+                    
+            except Exception as e:
+                debug_logs.append(f"검색 중 오류 발생 ({metro_name}): {str(e)}")
+                continue
+
+        # PDF 텍스트 추출
+        pdf_text = extract_pdf_text(pdf_path)
+
+        # API 키 확인
+        gemini_api_key = request.form.get('geminiApiKey', '').strip()
+        openai_api_key = request.form.get('openaiApiKey', '').strip()
+
+        if not gemini_api_key and not openai_api_key:
+            return jsonify({'error': 'API 키를 하나 이상 입력해주세요.'}), 400
+
+        analysis_results = []
+        is_first_ordinance = not results
+
+        # Gemini API 분석
+        if gemini_api_key:
+            try:
+                genai.configure(api_key=gemini_api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
+                debug_logs.append(f"[DEBUG] Gemini 프롬프트 길이: {len(prompt)}")
+                response = model.generate_content(prompt)
+                debug_logs.append(f"[DEBUG] Gemini 응답: {getattr(response, 'text', None)}")
+                if response and hasattr(response, 'text') and response.text:
+                    analysis_results.append({
+                        'model': 'Gemini',
+                        'content': response.text
+                    })
+                else:
+                    analysis_results.append({
+                        'model': 'Gemini',
+                        'error': 'Gemini API 응답이 비어있음 또는 None입니다.'
+                    })
+            except Exception as e:
+                debug_logs.append(f"Gemini API 오류: {str(e)}")
+                analysis_results.append({
+                    'model': 'Gemini',
+                    'error': str(e)
+                })
+
+        # OpenAI API 분석
+        if openai_api_key:
+            try:
+                openai.api_key = openai_api_key
+                prompt = create_analysis_prompt(pdf_text, results, is_first_ordinance)
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "당신은 법률 전문가입니다. 조례 분석과 검토를 도와주세요."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=4000
+                )
+                if response.choices[0].message.content:
+                    analysis_results.append({
+                        'model': 'OpenAI',
+                        'content': response.choices[0].message.content
+                    })
+            except Exception as e:
+                print(f"OpenAI API 오류: {str(e)}")
+                analysis_results.append({
+                    'model': 'OpenAI',
+                    'error': str(e)
+                })
+
+        if not analysis_results:
+            return jsonify({'error': '분석 결과가 없습니다.'}), 500
+
+        doc = create_comparison_document(pdf_text, results, analysis_results, debug_logs)
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'comparison_results.docx')
         doc.save(temp_docx)
-
         return send_file(
             temp_docx,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -489,8 +637,7 @@ def compare():
         )
 
     except Exception as e:
-        print(f"비교 분석 중 오류 발생: {str(e)}")
-        return jsonify({'error': f'비교 분석 중 오류가 발생했습니다: {str(e)}'}), 500
+        return jsonify({'error': f'비교 분석(워드 저장) 중 오류가 발생했습니다: {str(e)}'}), 500
 
 def create_analysis_prompt(pdf_text, search_results, is_first_ordinance=False):
     prompt = (
@@ -543,7 +690,7 @@ def create_analysis_prompt(pdf_text, search_results, is_first_ordinance=False):
     )
     return prompt
 
-def create_comparison_document(pdf_text, search_results, analysis_results):
+def create_comparison_document(pdf_text, search_results, analysis_results, debug_logs=None):
     doc = Document()
     section = doc.sections[-1]
     section.orientation = WD_ORIENT.LANDSCAPE
@@ -553,6 +700,12 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
     # 제목 추가
     doc.add_heading('조례 비교 분석 결과', level=1)
     doc.add_paragraph(f'분석 일시: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+    # 디버그 로그가 있으면 문서에 추가
+    if debug_logs:
+        doc.add_heading('디버그 로그', level=2)
+        for log in debug_logs:
+            doc.add_paragraph(log)
 
     # 각 API 분석 결과 추가
     for result in analysis_results:
@@ -735,55 +888,49 @@ def create_comparison_document(pdf_text, search_results, analysis_results):
 
 def is_valid_law_name(name):
     """
-    법령명이 유효한지 검사하는 함수
+    법령명이 유효한지 검사하는 함수 (더 엄격하게 개선)
     """
     name_clean = name.strip().replace(' ', '').replace('「','').replace('」','').replace('[','').replace(']','').replace('(','').replace(')','').replace('<','').replace('>','').replace('"','').replace('"','').lower()
-    
-    # 너무 짧은 이름 제외
-    if len(name_clean) <= 3:
+    # 너무 짧은 이름 제외 (4글자 미만 제외)
+    if len(name_clean) < 4:
         print(f'[DEBUG] 너무 짧아서 제외: {name}')
         return False
-        
+    # 반드시 '법', '시행령', '시행규칙'으로 끝나야 함
+    if not (name_clean.endswith('법') or name_clean.endswith('시행령') or name_clean.endswith('시행규칙')):
+        print(f'[DEBUG] 법/시행령/시행규칙으로 끝나지 않아 제외: {name}')
+        return False
     # 단독 불용어 제외
     if name_clean in {'기본법', '시행령', '시행규칙'}:
         print(f'[DEBUG] 단독 불용어로 제외: {name}')
         return False
-        
     # "등 관련 법" 및 유사 표현 제외
     if '등관련법' in name_clean or '관련법' in name_clean or '관련법령' in name_clean:
         print(f'[DEBUG] 관련법 표현으로 제외: {name}')
         return False
-        
     # "및 관련 시행령" 및 유사 표현 제외
     if '및관련시행령' in name_clean or '및시행령' in name_clean or '및시행규칙' in name_clean:
         print(f'[DEBUG] 관련 시행령/규칙 표현으로 제외: {name}')
         return False
-        
     # "령과의 법" 및 유사 표현 제외
     if '령과의법' in name_clean or '령과법' in name_clean or '령과의' in name_clean:
         print(f'[DEBUG] 령과의 법 표현으로 제외: {name}')
         return False
-        
     # 불용어 목록
     invalid_terms = {
         '자치입법', '조례', '규칙', '지침', '내규', '예규', '훈령', '적법', '입법', 
         '상위법', '위법', '합법', '불법', '방법', '헌법상', '헌법적', '법적', 
         '법률적', '법령상', '법률상', '법률', '법령', '법', '규정', '조항', 
         '조문', '규범', '원칙', '기준', '사항', '관련법', '관련 법', '관련법령', 
-        '관련 법령'
+        '관련 법령', '이러한표현이모호하여법', '법령우위의원칙위반여부'
     }
-    
-    # 불용어 체크
     for invalid in invalid_terms:
-        if name_clean == invalid.replace(' ', '').lower() and len(name_clean) <= 5:
+        if name_clean == invalid.replace(' ', '').lower():
             print(f'[DEBUG] 불용어로 제외: {name}')
             return False
-            
-    # 숫자로 시작하는 법령명 제외
-    if name_clean and name_clean[0].isdigit():
-        print(f'[DEBUG] 숫자+법으로 제외: {name}')
+    # 숫자, 영문, 특수문자 포함된 경우 제외
+    if not all('\uac00' <= ch <= '\ud7a3' for ch in name_clean):
+        print(f'[DEBUG] 한글 이외 문자 포함되어 제외: {name}')
         return False
-        
     return True
 
 if __name__ == '__main__':

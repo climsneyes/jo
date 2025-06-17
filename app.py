@@ -477,19 +477,17 @@ def compare():
         if not analysis_results:
             return jsonify({'error': '분석 결과가 없습니다.'}), 500
 
-        # Word 문서 생성
+        # Word 문서 생성 (분석 결과, 디버그 로그 등 모두 워드에만 저장)
         doc = create_comparison_document(pdf_text, results, analysis_results, debug_logs)
-
         # 임시 파일로 저장
         temp_docx = os.path.join(app.config['UPLOAD_FOLDER'], 'comparison_results.docx')
         doc.save(temp_docx)
-
         return send_file(
             temp_docx,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,
             download_name=f'조례_비교분석_{datetime.now().strftime("%Y%m%d_%H%M%S")}.docx'
-        ), 200, {'X-Debug-Log': '\n'.join(debug_logs)}
+        )
 
     except Exception as e:
         print(f"비교 분석 중 오류 발생: {str(e)}")
